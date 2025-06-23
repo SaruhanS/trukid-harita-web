@@ -1,0 +1,111 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>TruKid Harita</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <style>
+        html, body, #map { height: 100%; margin: 0; padding: 0; }
+        .info-box {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            font-size: 13px;
+            border: 1px solid #888;
+            border-radius: 6px;
+            z-index: 999;
+            line-height: 1.5;
+        }
+        .product-summary {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            font-size: 12px;
+            border: 1px solid #888;
+            border-radius: 6px;
+            z-index: 999;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="info-box" id="infoBox"></div>
+<div class="product-summary" id="productSummary"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+    const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT_J8Lyv0E8v9pFzTg5IVNxD2MQD-bONUgRLIjAY3FecnaeL2MzBj9hl-EioDbcaYXI6E-M_-u9vMCu/pub?output=csv';
+
+    const map = L.map('map').setView([39.0, 35.0], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap katkıcılara'
+    }).addTo(map);
+
+    let eczaneCount = 0;
+    let siparisCount = 0;
+    let urunCount = 0;
+    let productCounter = {};
+
+    Papa.parse(sheetUrl, {
+        download: true,
+        header: true,
+        complete: function(results) {
+            results.data.forEach(row => {
+                const tip = row['Sipariş No'];
+                const [lat, lon] = row['Koordinat'].split(',').map(Number);
+                const urun = row['Ürün Adı'] || 'Bilinmeyen Ürün';
+
+                if (!lat || !lon) return;
+
+                const isEczane = tip.toLowerCase() === 'eczane';
+                const popup = isEczane ? `<b>Eczane:</b><br>${urun}` : `<b>Sipariş:</b> ${tip}<br>${urun}`;
+                const iconColor = isEczane ? 'red' : 'blue';
+                const icon = L.icon({
+                    iconUrl: `https://maps.google.com/mapfiles/ms/icons/${iconColor}-dot.png`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 32],
+                    popupAnchor: [0, -32]
+                });
+
+                L.marker([lat, lon], { icon }).addTo(map).bindPopup(popup);
+
+                if (isEczane) {
+                    eczaneCount++;
+                } else {
+                    siparisCount++;
+                    urunCount++;
+                    productCounter[urun] = (productCounter[urun] || 0) + 1;
+                }
+            });
+
+            // Sayı kutusu
+            document.getElementById('infoBox').innerHTML = `
+                🔴 <b>Eczane Sayısı:</b> ${eczaneCount}<br>
+                🔵 <b>Sipariş Sayısı:</b> ${siparisCount}<br>
+                🟢 <b>Ürün Satırı:</b> ${urunCount}
+            `;
+
+            // Ürün adet tablosu
+            const sorted = Object.entries(productCounter).sort((a,b) => b[1]-a[1]);
+            let summaryHTML = '<b>Satılan Ürünler:</b><br><table>';
+            sorted.forEach(([urun, adet]) => {
+                summaryHTML += `<tr><td>${urun}</td><td style="text-align:right; padding-left: 8px;">${adet}</td></tr>`;
+            });
+            summaryHTML += '</table>';
+            document.getElementById('productSummary').innerHTML = summaryHTML;
+        }
+    });
+</script>
+</body>
+</html>
